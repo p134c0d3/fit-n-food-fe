@@ -7391,6 +7391,443 @@ function isInSkipHydrationBlock(tNode) {
   }
   return false;
 }
+var TRACKED_LVIEWS = /* @__PURE__ */ new Map();
+var uniqueIdCounter = 0;
+function getUniqueLViewId() {
+  return uniqueIdCounter++;
+}
+function registerLView(lView) {
+  ngDevMode && assertNumber(lView[ID], "LView must have an ID in order to be registered");
+  TRACKED_LVIEWS.set(lView[ID], lView);
+}
+function getLViewById(id) {
+  ngDevMode && assertNumber(id, "ID used for LView lookup must be a number");
+  return TRACKED_LVIEWS.get(id) || null;
+}
+function unregisterLView(lView) {
+  ngDevMode && assertNumber(lView[ID], "Cannot stop tracking an LView that does not have an ID");
+  TRACKED_LVIEWS.delete(lView[ID]);
+}
+var LContext = class {
+  /** Component's parent view data. */
+  get lView() {
+    return getLViewById(this.lViewId);
+  }
+  constructor(lViewId, nodeIndex, native) {
+    this.lViewId = lViewId;
+    this.nodeIndex = nodeIndex;
+    this.native = native;
+  }
+};
+function getLContext(target) {
+  let mpValue = readPatchedData(target);
+  if (mpValue) {
+    if (isLView(mpValue)) {
+      const lView = mpValue;
+      let nodeIndex;
+      let component = void 0;
+      let directives = void 0;
+      if (isComponentInstance(target)) {
+        nodeIndex = findViaComponent(lView, target);
+        if (nodeIndex == -1) {
+          throw new Error("The provided component was not found in the application");
+        }
+        component = target;
+      } else if (isDirectiveInstance(target)) {
+        nodeIndex = findViaDirective(lView, target);
+        if (nodeIndex == -1) {
+          throw new Error("The provided directive was not found in the application");
+        }
+        directives = getDirectivesAtNodeIndex(nodeIndex, lView);
+      } else {
+        nodeIndex = findViaNativeElement(lView, target);
+        if (nodeIndex == -1) {
+          return null;
+        }
+      }
+      const native = unwrapRNode(lView[nodeIndex]);
+      const existingCtx = readPatchedData(native);
+      const context2 = existingCtx && !Array.isArray(existingCtx) ? existingCtx : createLContext(lView, nodeIndex, native);
+      if (component && context2.component === void 0) {
+        context2.component = component;
+        attachPatchData(context2.component, context2);
+      }
+      if (directives && context2.directives === void 0) {
+        context2.directives = directives;
+        for (let i = 0; i < directives.length; i++) {
+          attachPatchData(directives[i], context2);
+        }
+      }
+      attachPatchData(context2.native, context2);
+      mpValue = context2;
+    }
+  } else {
+    const rElement = target;
+    ngDevMode && assertDomNode(rElement);
+    let parent = rElement;
+    while (parent = parent.parentNode) {
+      const parentContext = readPatchedData(parent);
+      if (parentContext) {
+        const lView = Array.isArray(parentContext) ? parentContext : parentContext.lView;
+        if (!lView) {
+          return null;
+        }
+        const index = findViaNativeElement(lView, rElement);
+        if (index >= 0) {
+          const native = unwrapRNode(lView[index]);
+          const context2 = createLContext(lView, index, native);
+          attachPatchData(native, context2);
+          mpValue = context2;
+          break;
+        }
+      }
+    }
+  }
+  return mpValue || null;
+}
+function createLContext(lView, nodeIndex, native) {
+  return new LContext(lView[ID], nodeIndex, native);
+}
+function getComponentViewByInstance(componentInstance) {
+  let patchedData = readPatchedData(componentInstance);
+  let lView;
+  if (isLView(patchedData)) {
+    const contextLView = patchedData;
+    const nodeIndex = findViaComponent(contextLView, componentInstance);
+    lView = getComponentLViewByIndex(nodeIndex, contextLView);
+    const context2 = createLContext(contextLView, nodeIndex, lView[HOST]);
+    context2.component = componentInstance;
+    attachPatchData(componentInstance, context2);
+    attachPatchData(context2.native, context2);
+  } else {
+    const context2 = patchedData;
+    const contextLView = context2.lView;
+    ngDevMode && assertLView(contextLView);
+    lView = getComponentLViewByIndex(context2.nodeIndex, contextLView);
+  }
+  return lView;
+}
+var MONKEY_PATCH_KEY_NAME = "__ngContext__";
+function attachPatchData(target, data) {
+  ngDevMode && assertDefined(target, "Target expected");
+  if (isLView(data)) {
+    target[MONKEY_PATCH_KEY_NAME] = data[ID];
+    registerLView(data);
+  } else {
+    target[MONKEY_PATCH_KEY_NAME] = data;
+  }
+}
+function readPatchedData(target) {
+  ngDevMode && assertDefined(target, "Target expected");
+  const data = target[MONKEY_PATCH_KEY_NAME];
+  return typeof data === "number" ? getLViewById(data) : data || null;
+}
+function readPatchedLView(target) {
+  const value = readPatchedData(target);
+  if (value) {
+    return isLView(value) ? value : value.lView;
+  }
+  return null;
+}
+function isComponentInstance(instance) {
+  return instance && instance.constructor && instance.constructor.ɵcmp;
+}
+function isDirectiveInstance(instance) {
+  return instance && instance.constructor && instance.constructor.ɵdir;
+}
+function findViaNativeElement(lView, target) {
+  const tView = lView[TVIEW];
+  for (let i = HEADER_OFFSET; i < tView.bindingStartIndex; i++) {
+    if (unwrapRNode(lView[i]) === target) {
+      return i;
+    }
+  }
+  return -1;
+}
+function traverseNextElement(tNode) {
+  if (tNode.child) {
+    return tNode.child;
+  } else if (tNode.next) {
+    return tNode.next;
+  } else {
+    while (tNode.parent && !tNode.parent.next) {
+      tNode = tNode.parent;
+    }
+    return tNode.parent && tNode.parent.next;
+  }
+}
+function findViaComponent(lView, componentInstance) {
+  const componentIndices = lView[TVIEW].components;
+  if (componentIndices) {
+    for (let i = 0; i < componentIndices.length; i++) {
+      const elementComponentIndex = componentIndices[i];
+      const componentView = getComponentLViewByIndex(elementComponentIndex, lView);
+      if (componentView[CONTEXT] === componentInstance) {
+        return elementComponentIndex;
+      }
+    }
+  } else {
+    const rootComponentView = getComponentLViewByIndex(HEADER_OFFSET, lView);
+    const rootComponent = rootComponentView[CONTEXT];
+    if (rootComponent === componentInstance) {
+      return HEADER_OFFSET;
+    }
+  }
+  return -1;
+}
+function findViaDirective(lView, directiveInstance) {
+  let tNode = lView[TVIEW].firstChild;
+  while (tNode) {
+    const directiveIndexStart = tNode.directiveStart;
+    const directiveIndexEnd = tNode.directiveEnd;
+    for (let i = directiveIndexStart; i < directiveIndexEnd; i++) {
+      if (lView[i] === directiveInstance) {
+        return tNode.index;
+      }
+    }
+    tNode = traverseNextElement(tNode);
+  }
+  return -1;
+}
+function getDirectivesAtNodeIndex(nodeIndex, lView) {
+  const tNode = lView[TVIEW].data[nodeIndex];
+  if (tNode.directiveStart === 0)
+    return EMPTY_ARRAY;
+  const results = [];
+  for (let i = tNode.directiveStart; i < tNode.directiveEnd; i++) {
+    const directiveInstance = lView[i];
+    if (!isComponentInstance(directiveInstance)) {
+      results.push(directiveInstance);
+    }
+  }
+  return results;
+}
+function getComponentAtNodeIndex(nodeIndex, lView) {
+  const tNode = lView[TVIEW].data[nodeIndex];
+  const { directiveStart, componentOffset } = tNode;
+  return componentOffset > -1 ? lView[directiveStart + componentOffset] : null;
+}
+function discoverLocalRefs(lView, nodeIndex) {
+  const tNode = lView[TVIEW].data[nodeIndex];
+  if (tNode && tNode.localNames) {
+    const result = {};
+    let localIndex = tNode.index + 1;
+    for (let i = 0; i < tNode.localNames.length; i += 2) {
+      result[tNode.localNames[i]] = lView[localIndex];
+      localIndex++;
+    }
+    return result;
+  }
+  return null;
+}
+function getRootView(componentOrLView) {
+  ngDevMode && assertDefined(componentOrLView, "component");
+  let lView = isLView(componentOrLView) ? componentOrLView : readPatchedLView(componentOrLView);
+  while (lView && !(lView[FLAGS] & 512)) {
+    lView = getLViewParent(lView);
+  }
+  ngDevMode && assertLView(lView);
+  return lView;
+}
+function getRootContext(viewOrComponent) {
+  const rootView = getRootView(viewOrComponent);
+  ngDevMode && assertDefined(rootView[CONTEXT], "Root view has no context. Perhaps it is disconnected?");
+  return rootView[CONTEXT];
+}
+function getFirstLContainer(lView) {
+  return getNearestLContainer(lView[CHILD_HEAD]);
+}
+function getNextLContainer(container) {
+  return getNearestLContainer(container[NEXT]);
+}
+function getNearestLContainer(viewOrContainer) {
+  while (viewOrContainer !== null && !isLContainer(viewOrContainer)) {
+    viewOrContainer = viewOrContainer[NEXT];
+  }
+  return viewOrContainer;
+}
+function getComponent$1(element) {
+  ngDevMode && assertDomElement(element);
+  const context2 = getLContext(element);
+  if (context2 === null)
+    return null;
+  if (context2.component === void 0) {
+    const lView = context2.lView;
+    if (lView === null) {
+      return null;
+    }
+    context2.component = getComponentAtNodeIndex(context2.nodeIndex, lView);
+  }
+  return context2.component;
+}
+function getContext(element) {
+  assertDomElement(element);
+  const context2 = getLContext(element);
+  const lView = context2 ? context2.lView : null;
+  return lView === null ? null : lView[CONTEXT];
+}
+function getOwningComponent(elementOrDir) {
+  const context2 = getLContext(elementOrDir);
+  let lView = context2 ? context2.lView : null;
+  if (lView === null)
+    return null;
+  let parent;
+  while (lView[TVIEW].type === 2 && (parent = getLViewParent(lView))) {
+    lView = parent;
+  }
+  return lView[FLAGS] & 512 ? null : lView[CONTEXT];
+}
+function getRootComponents(elementOrDir) {
+  const lView = readPatchedLView(elementOrDir);
+  return lView !== null ? [getRootContext(lView)] : [];
+}
+function getInjector(elementOrDir) {
+  const context2 = getLContext(elementOrDir);
+  const lView = context2 ? context2.lView : null;
+  if (lView === null)
+    return Injector.NULL;
+  const tNode = lView[TVIEW].data[context2.nodeIndex];
+  return new NodeInjector(tNode, lView);
+}
+function getInjectionTokens(element) {
+  const context2 = getLContext(element);
+  const lView = context2 ? context2.lView : null;
+  if (lView === null)
+    return [];
+  const tView = lView[TVIEW];
+  const tNode = tView.data[context2.nodeIndex];
+  const providerTokens = [];
+  const startIndex = tNode.providerIndexes & 1048575;
+  const endIndex = tNode.directiveEnd;
+  for (let i = startIndex; i < endIndex; i++) {
+    let value = tView.data[i];
+    if (isDirectiveDefHack(value)) {
+      value = value.type;
+    }
+    providerTokens.push(value);
+  }
+  return providerTokens;
+}
+function getDirectives(node) {
+  if (node instanceof Text) {
+    return [];
+  }
+  const context2 = getLContext(node);
+  const lView = context2 ? context2.lView : null;
+  if (lView === null) {
+    return [];
+  }
+  const tView = lView[TVIEW];
+  const nodeIndex = context2.nodeIndex;
+  if (!tView?.data[nodeIndex]) {
+    return [];
+  }
+  if (context2.directives === void 0) {
+    context2.directives = getDirectivesAtNodeIndex(nodeIndex, lView);
+  }
+  return context2.directives === null ? [] : [...context2.directives];
+}
+function getDirectiveMetadata$1(directiveOrComponentInstance) {
+  const { constructor } = directiveOrComponentInstance;
+  if (!constructor) {
+    throw new Error("Unable to find the instance constructor");
+  }
+  const componentDef = getComponentDef(constructor);
+  if (componentDef) {
+    const inputs = extractInputDebugMetadata(componentDef.inputs);
+    return {
+      inputs,
+      outputs: componentDef.outputs,
+      encapsulation: componentDef.encapsulation,
+      changeDetection: componentDef.onPush ? ChangeDetectionStrategy.OnPush : ChangeDetectionStrategy.Default
+    };
+  }
+  const directiveDef = getDirectiveDef(constructor);
+  if (directiveDef) {
+    const inputs = extractInputDebugMetadata(directiveDef.inputs);
+    return { inputs, outputs: directiveDef.outputs };
+  }
+  return null;
+}
+function getLocalRefs(target) {
+  const context2 = getLContext(target);
+  if (context2 === null)
+    return {};
+  if (context2.localRefs === void 0) {
+    const lView = context2.lView;
+    if (lView === null) {
+      return {};
+    }
+    context2.localRefs = discoverLocalRefs(lView, context2.nodeIndex);
+  }
+  return context2.localRefs || {};
+}
+function getHostElement(componentOrDirective) {
+  return getLContext(componentOrDirective).native;
+}
+function getListeners(element) {
+  ngDevMode && assertDomElement(element);
+  const lContext = getLContext(element);
+  const lView = lContext === null ? null : lContext.lView;
+  if (lView === null)
+    return [];
+  const tView = lView[TVIEW];
+  const lCleanup = lView[CLEANUP];
+  const tCleanup = tView.cleanup;
+  const listeners = [];
+  if (tCleanup && lCleanup) {
+    for (let i = 0; i < tCleanup.length; ) {
+      const firstParam = tCleanup[i++];
+      const secondParam = tCleanup[i++];
+      if (typeof firstParam === "string") {
+        const name = firstParam;
+        const listenerElement = unwrapRNode(lView[secondParam]);
+        const callback = lCleanup[tCleanup[i++]];
+        const useCaptureOrIndx = tCleanup[i++];
+        const type = typeof useCaptureOrIndx === "boolean" || useCaptureOrIndx >= 0 ? "dom" : "output";
+        const useCapture = typeof useCaptureOrIndx === "boolean" ? useCaptureOrIndx : false;
+        if (element == listenerElement) {
+          listeners.push({ element, name, callback, useCapture, type });
+        }
+      }
+    }
+  }
+  listeners.sort(sortListeners);
+  return listeners;
+}
+function sortListeners(a, b) {
+  if (a.name == b.name)
+    return 0;
+  return a.name < b.name ? -1 : 1;
+}
+function isDirectiveDefHack(obj) {
+  return obj.type !== void 0 && obj.declaredInputs !== void 0 && obj.findHostDirectiveDefs !== void 0;
+}
+function assertDomElement(value) {
+  if (typeof Element !== "undefined" && !(value instanceof Element)) {
+    throw new Error("Expecting instance of DOM Element");
+  }
+}
+function extractInputDebugMetadata(inputs) {
+  const res = {};
+  for (const key in inputs) {
+    if (!inputs.hasOwnProperty(key)) {
+      continue;
+    }
+    const value = inputs[key];
+    if (value === void 0) {
+      continue;
+    }
+    let minifiedName;
+    if (Array.isArray(value)) {
+      minifiedName = value[0];
+    } else {
+      minifiedName = value;
+    }
+    res[key] = minifiedName;
+  }
+  return res;
+}
 var DOCUMENT = void 0;
 function setDocument(document2) {
   DOCUMENT = document2;
@@ -7650,7 +8087,7 @@ function markRNodeAsHavingHydrationMismatch(node, expectedNodeDetails = null, ac
   if (!ngDevMode) {
     throw new Error("Calling `markRNodeAsMismatchedByHydration` in prod mode is not supported and likely a mistake.");
   }
-  while (node && readHydrationInfo(node)?.status !== HydrationStatus.Hydrated) {
+  while (node && !getComponent$1(node)) {
     node = node?.parentNode;
   }
   if (node) {
@@ -8186,235 +8623,6 @@ function normalizeDebugBindingValue(value) {
   } catch (e) {
     return "[ERROR] Exception while trying to serialize the value";
   }
-}
-var TRACKED_LVIEWS = /* @__PURE__ */ new Map();
-var uniqueIdCounter = 0;
-function getUniqueLViewId() {
-  return uniqueIdCounter++;
-}
-function registerLView(lView) {
-  ngDevMode && assertNumber(lView[ID], "LView must have an ID in order to be registered");
-  TRACKED_LVIEWS.set(lView[ID], lView);
-}
-function getLViewById(id) {
-  ngDevMode && assertNumber(id, "ID used for LView lookup must be a number");
-  return TRACKED_LVIEWS.get(id) || null;
-}
-function unregisterLView(lView) {
-  ngDevMode && assertNumber(lView[ID], "Cannot stop tracking an LView that does not have an ID");
-  TRACKED_LVIEWS.delete(lView[ID]);
-}
-var LContext = class {
-  /** Component's parent view data. */
-  get lView() {
-    return getLViewById(this.lViewId);
-  }
-  constructor(lViewId, nodeIndex, native) {
-    this.lViewId = lViewId;
-    this.nodeIndex = nodeIndex;
-    this.native = native;
-  }
-};
-function getLContext(target) {
-  let mpValue = readPatchedData(target);
-  if (mpValue) {
-    if (isLView(mpValue)) {
-      const lView = mpValue;
-      let nodeIndex;
-      let component = void 0;
-      let directives = void 0;
-      if (isComponentInstance(target)) {
-        nodeIndex = findViaComponent(lView, target);
-        if (nodeIndex == -1) {
-          throw new Error("The provided component was not found in the application");
-        }
-        component = target;
-      } else if (isDirectiveInstance(target)) {
-        nodeIndex = findViaDirective(lView, target);
-        if (nodeIndex == -1) {
-          throw new Error("The provided directive was not found in the application");
-        }
-        directives = getDirectivesAtNodeIndex(nodeIndex, lView);
-      } else {
-        nodeIndex = findViaNativeElement(lView, target);
-        if (nodeIndex == -1) {
-          return null;
-        }
-      }
-      const native = unwrapRNode(lView[nodeIndex]);
-      const existingCtx = readPatchedData(native);
-      const context2 = existingCtx && !Array.isArray(existingCtx) ? existingCtx : createLContext(lView, nodeIndex, native);
-      if (component && context2.component === void 0) {
-        context2.component = component;
-        attachPatchData(context2.component, context2);
-      }
-      if (directives && context2.directives === void 0) {
-        context2.directives = directives;
-        for (let i = 0; i < directives.length; i++) {
-          attachPatchData(directives[i], context2);
-        }
-      }
-      attachPatchData(context2.native, context2);
-      mpValue = context2;
-    }
-  } else {
-    const rElement = target;
-    ngDevMode && assertDomNode(rElement);
-    let parent = rElement;
-    while (parent = parent.parentNode) {
-      const parentContext = readPatchedData(parent);
-      if (parentContext) {
-        const lView = Array.isArray(parentContext) ? parentContext : parentContext.lView;
-        if (!lView) {
-          return null;
-        }
-        const index = findViaNativeElement(lView, rElement);
-        if (index >= 0) {
-          const native = unwrapRNode(lView[index]);
-          const context2 = createLContext(lView, index, native);
-          attachPatchData(native, context2);
-          mpValue = context2;
-          break;
-        }
-      }
-    }
-  }
-  return mpValue || null;
-}
-function createLContext(lView, nodeIndex, native) {
-  return new LContext(lView[ID], nodeIndex, native);
-}
-function getComponentViewByInstance(componentInstance) {
-  let patchedData = readPatchedData(componentInstance);
-  let lView;
-  if (isLView(patchedData)) {
-    const contextLView = patchedData;
-    const nodeIndex = findViaComponent(contextLView, componentInstance);
-    lView = getComponentLViewByIndex(nodeIndex, contextLView);
-    const context2 = createLContext(contextLView, nodeIndex, lView[HOST]);
-    context2.component = componentInstance;
-    attachPatchData(componentInstance, context2);
-    attachPatchData(context2.native, context2);
-  } else {
-    const context2 = patchedData;
-    const contextLView = context2.lView;
-    ngDevMode && assertLView(contextLView);
-    lView = getComponentLViewByIndex(context2.nodeIndex, contextLView);
-  }
-  return lView;
-}
-var MONKEY_PATCH_KEY_NAME = "__ngContext__";
-function attachPatchData(target, data) {
-  ngDevMode && assertDefined(target, "Target expected");
-  if (isLView(data)) {
-    target[MONKEY_PATCH_KEY_NAME] = data[ID];
-    registerLView(data);
-  } else {
-    target[MONKEY_PATCH_KEY_NAME] = data;
-  }
-}
-function readPatchedData(target) {
-  ngDevMode && assertDefined(target, "Target expected");
-  const data = target[MONKEY_PATCH_KEY_NAME];
-  return typeof data === "number" ? getLViewById(data) : data || null;
-}
-function readPatchedLView(target) {
-  const value = readPatchedData(target);
-  if (value) {
-    return isLView(value) ? value : value.lView;
-  }
-  return null;
-}
-function isComponentInstance(instance) {
-  return instance && instance.constructor && instance.constructor.ɵcmp;
-}
-function isDirectiveInstance(instance) {
-  return instance && instance.constructor && instance.constructor.ɵdir;
-}
-function findViaNativeElement(lView, target) {
-  const tView = lView[TVIEW];
-  for (let i = HEADER_OFFSET; i < tView.bindingStartIndex; i++) {
-    if (unwrapRNode(lView[i]) === target) {
-      return i;
-    }
-  }
-  return -1;
-}
-function traverseNextElement(tNode) {
-  if (tNode.child) {
-    return tNode.child;
-  } else if (tNode.next) {
-    return tNode.next;
-  } else {
-    while (tNode.parent && !tNode.parent.next) {
-      tNode = tNode.parent;
-    }
-    return tNode.parent && tNode.parent.next;
-  }
-}
-function findViaComponent(lView, componentInstance) {
-  const componentIndices = lView[TVIEW].components;
-  if (componentIndices) {
-    for (let i = 0; i < componentIndices.length; i++) {
-      const elementComponentIndex = componentIndices[i];
-      const componentView = getComponentLViewByIndex(elementComponentIndex, lView);
-      if (componentView[CONTEXT] === componentInstance) {
-        return elementComponentIndex;
-      }
-    }
-  } else {
-    const rootComponentView = getComponentLViewByIndex(HEADER_OFFSET, lView);
-    const rootComponent = rootComponentView[CONTEXT];
-    if (rootComponent === componentInstance) {
-      return HEADER_OFFSET;
-    }
-  }
-  return -1;
-}
-function findViaDirective(lView, directiveInstance) {
-  let tNode = lView[TVIEW].firstChild;
-  while (tNode) {
-    const directiveIndexStart = tNode.directiveStart;
-    const directiveIndexEnd = tNode.directiveEnd;
-    for (let i = directiveIndexStart; i < directiveIndexEnd; i++) {
-      if (lView[i] === directiveInstance) {
-        return tNode.index;
-      }
-    }
-    tNode = traverseNextElement(tNode);
-  }
-  return -1;
-}
-function getDirectivesAtNodeIndex(nodeIndex, lView) {
-  const tNode = lView[TVIEW].data[nodeIndex];
-  if (tNode.directiveStart === 0)
-    return EMPTY_ARRAY;
-  const results = [];
-  for (let i = tNode.directiveStart; i < tNode.directiveEnd; i++) {
-    const directiveInstance = lView[i];
-    if (!isComponentInstance(directiveInstance)) {
-      results.push(directiveInstance);
-    }
-  }
-  return results;
-}
-function getComponentAtNodeIndex(nodeIndex, lView) {
-  const tNode = lView[TVIEW].data[nodeIndex];
-  const { directiveStart, componentOffset } = tNode;
-  return componentOffset > -1 ? lView[directiveStart + componentOffset] : null;
-}
-function discoverLocalRefs(lView, nodeIndex) {
-  const tNode = lView[TVIEW].data[nodeIndex];
-  if (tNode && tNode.localNames) {
-    const result = {};
-    let localIndex = tNode.index + 1;
-    for (let i = 0; i < tNode.localNames.length; i += 2) {
-      result[tNode.localNames[i]] = lView[localIndex];
-      localIndex++;
-    }
-    return result;
-  }
-  return null;
 }
 var CUSTOM_ELEMENTS_SCHEMA = {
   name: "custom-elements"
@@ -10227,7 +10435,7 @@ function createAndRenderEmbeddedLView(declarationLView, templateTNode, context2,
     ngDevMode && assertTNodeForLView(templateTNode, declarationLView);
     const isSignalView = declarationLView[FLAGS] & 4096;
     const viewFlags = isSignalView ? 4096 : 16;
-    const embeddedLView = createLView(declarationLView, embeddedTView, context2, viewFlags, null, templateTNode, null, null, null, options?.injector ?? null, options?.dehydratedView ?? null);
+    const embeddedLView = createLView(declarationLView, embeddedTView, context2, viewFlags, null, templateTNode, null, null, options?.injector ?? null, options?.embeddedViewInjector ?? null, options?.dehydratedView ?? null);
     const declarationLContainer = declarationLView[templateTNode.index];
     ngDevMode && assertLContainer(declarationLContainer);
     embeddedLView[DECLARATION_LCONTAINER] = declarationLContainer;
@@ -10350,32 +10558,6 @@ var REACTIVE_LVIEW_CONSUMER_NODE = __spreadProps(__spreadValues({}, REACTIVE_NOD
     this.lView[REACTIVE_TEMPLATE_CONSUMER] = this;
   }
 });
-function getRootView(componentOrLView) {
-  ngDevMode && assertDefined(componentOrLView, "component");
-  let lView = isLView(componentOrLView) ? componentOrLView : readPatchedLView(componentOrLView);
-  while (lView && !(lView[FLAGS] & 512)) {
-    lView = getLViewParent(lView);
-  }
-  ngDevMode && assertLView(lView);
-  return lView;
-}
-function getRootContext(viewOrComponent) {
-  const rootView = getRootView(viewOrComponent);
-  ngDevMode && assertDefined(rootView[CONTEXT], "Root view has no context. Perhaps it is disconnected?");
-  return rootView[CONTEXT];
-}
-function getFirstLContainer(lView) {
-  return getNearestLContainer(lView[CHILD_HEAD]);
-}
-function getNextLContainer(container) {
-  return getNearestLContainer(container[NEXT]);
-}
-function getNearestLContainer(viewOrContainer) {
-  while (viewOrContainer !== null && !isLContainer(viewOrContainer)) {
-    viewOrContainer = viewOrContainer[NEXT];
-  }
-  return viewOrContainer;
-}
 var MAXIMUM_REFRESH_RERUNS = 100;
 function detectChangesInternal(lView, notifyErrorHandler = true, mode = 0) {
   const environment = lView[ENVIRONMENT];
@@ -10920,7 +11102,7 @@ var R3TemplateRef = class TemplateRef2 extends ViewEngineTemplateRef {
    * @internal
    */
   createEmbeddedViewImpl(context2, injector, dehydratedView) {
-    const embeddedLView = createAndRenderEmbeddedLView(this._declarationLView, this._declarationTContainer, context2, { injector, dehydratedView });
+    const embeddedLView = createAndRenderEmbeddedLView(this._declarationLView, this._declarationTContainer, context2, { embeddedViewInjector: injector, dehydratedView });
     return new ViewRef$1(embeddedLView);
   }
 };
@@ -10968,11 +11150,12 @@ ${expectedDom}
 
 `;
     let actual = "";
+    const componentHostElement = unwrapRNode(lView[HOST]);
     if (!node) {
       header += `the node was not found.
 
 `;
-      markRNodeAsHavingHydrationMismatch(unwrapRNode(lView[HOST]), expectedDom);
+      markRNodeAsHavingHydrationMismatch(componentHostElement, expectedDom);
     } else {
       const actualNode = shortRNodeDescription(node.nodeType, node.tagName ?? null, node.textContent ?? null);
       header += `found ${actualNode}.
@@ -10984,7 +11167,7 @@ ${expectedDom}
 ${actualDom}
 
 `;
-      markRNodeAsHavingHydrationMismatch(node, expectedDom, actualDom);
+      markRNodeAsHavingHydrationMismatch(componentHostElement, expectedDom, actualDom);
     }
     const footer = getHydrationErrorFooter(componentClassName);
     const message = header + expected + actual + getHydrationAttributeNote() + footer;
@@ -12557,7 +12740,7 @@ function createRootComponent(componentView, rootComponentDef, rootDirectives, ho
 }
 function setRootNodeAttributes(hostRenderer, componentDef, hostRNode, rootSelectorOrNode) {
   if (rootSelectorOrNode) {
-    setUpAttributes(hostRenderer, hostRNode, ["ng-version", "17.3.0"]);
+    setUpAttributes(hostRenderer, hostRNode, ["ng-version", "17.3.1"]);
   } else {
     const { attrs, classes } = extractAttrsAndClassesFromSelector(componentDef.selectors[0]);
     if (attrs) {
@@ -14888,7 +15071,7 @@ function applyDeferBlockState(newState, lDetails, lContainer, tNode, hostLView) 
       }
     }
     const dehydratedView = findMatchingDehydratedView(lContainer, activeBlockTNode.tView.ssrId);
-    const embeddedLView = createAndRenderEmbeddedLView(hostLView, activeBlockTNode, null, { dehydratedView, injector });
+    const embeddedLView = createAndRenderEmbeddedLView(hostLView, activeBlockTNode, null, { dehydratedView, embeddedViewInjector: injector });
     addLViewToLContainer(lContainer, embeddedLView, viewIndex, shouldAddViewToDom(activeBlockTNode, dehydratedView));
     markViewDirty(embeddedLView);
   }
@@ -18639,188 +18822,6 @@ function convertToTypeArray(values) {
 function maybeUnwrapModuleWithProviders(value) {
   return isModuleWithProviders(value) ? value.ngModule : value;
 }
-function getComponent(element) {
-  ngDevMode && assertDomElement(element);
-  const context2 = getLContext(element);
-  if (context2 === null)
-    return null;
-  if (context2.component === void 0) {
-    const lView = context2.lView;
-    if (lView === null) {
-      return null;
-    }
-    context2.component = getComponentAtNodeIndex(context2.nodeIndex, lView);
-  }
-  return context2.component;
-}
-function getContext(element) {
-  assertDomElement(element);
-  const context2 = getLContext(element);
-  const lView = context2 ? context2.lView : null;
-  return lView === null ? null : lView[CONTEXT];
-}
-function getOwningComponent(elementOrDir) {
-  const context2 = getLContext(elementOrDir);
-  let lView = context2 ? context2.lView : null;
-  if (lView === null)
-    return null;
-  let parent;
-  while (lView[TVIEW].type === 2 && (parent = getLViewParent(lView))) {
-    lView = parent;
-  }
-  return lView[FLAGS] & 512 ? null : lView[CONTEXT];
-}
-function getRootComponents(elementOrDir) {
-  const lView = readPatchedLView(elementOrDir);
-  return lView !== null ? [getRootContext(lView)] : [];
-}
-function getInjector(elementOrDir) {
-  const context2 = getLContext(elementOrDir);
-  const lView = context2 ? context2.lView : null;
-  if (lView === null)
-    return Injector.NULL;
-  const tNode = lView[TVIEW].data[context2.nodeIndex];
-  return new NodeInjector(tNode, lView);
-}
-function getInjectionTokens(element) {
-  const context2 = getLContext(element);
-  const lView = context2 ? context2.lView : null;
-  if (lView === null)
-    return [];
-  const tView = lView[TVIEW];
-  const tNode = tView.data[context2.nodeIndex];
-  const providerTokens = [];
-  const startIndex = tNode.providerIndexes & 1048575;
-  const endIndex = tNode.directiveEnd;
-  for (let i = startIndex; i < endIndex; i++) {
-    let value = tView.data[i];
-    if (isDirectiveDefHack(value)) {
-      value = value.type;
-    }
-    providerTokens.push(value);
-  }
-  return providerTokens;
-}
-function getDirectives(node) {
-  if (node instanceof Text) {
-    return [];
-  }
-  const context2 = getLContext(node);
-  const lView = context2 ? context2.lView : null;
-  if (lView === null) {
-    return [];
-  }
-  const tView = lView[TVIEW];
-  const nodeIndex = context2.nodeIndex;
-  if (!tView?.data[nodeIndex]) {
-    return [];
-  }
-  if (context2.directives === void 0) {
-    context2.directives = getDirectivesAtNodeIndex(nodeIndex, lView);
-  }
-  return context2.directives === null ? [] : [...context2.directives];
-}
-function getDirectiveMetadata$1(directiveOrComponentInstance) {
-  const { constructor } = directiveOrComponentInstance;
-  if (!constructor) {
-    throw new Error("Unable to find the instance constructor");
-  }
-  const componentDef = getComponentDef(constructor);
-  if (componentDef) {
-    const inputs = extractInputDebugMetadata(componentDef.inputs);
-    return {
-      inputs,
-      outputs: componentDef.outputs,
-      encapsulation: componentDef.encapsulation,
-      changeDetection: componentDef.onPush ? ChangeDetectionStrategy.OnPush : ChangeDetectionStrategy.Default
-    };
-  }
-  const directiveDef = getDirectiveDef(constructor);
-  if (directiveDef) {
-    const inputs = extractInputDebugMetadata(directiveDef.inputs);
-    return { inputs, outputs: directiveDef.outputs };
-  }
-  return null;
-}
-function getLocalRefs(target) {
-  const context2 = getLContext(target);
-  if (context2 === null)
-    return {};
-  if (context2.localRefs === void 0) {
-    const lView = context2.lView;
-    if (lView === null) {
-      return {};
-    }
-    context2.localRefs = discoverLocalRefs(lView, context2.nodeIndex);
-  }
-  return context2.localRefs || {};
-}
-function getHostElement(componentOrDirective) {
-  return getLContext(componentOrDirective).native;
-}
-function getListeners(element) {
-  ngDevMode && assertDomElement(element);
-  const lContext = getLContext(element);
-  const lView = lContext === null ? null : lContext.lView;
-  if (lView === null)
-    return [];
-  const tView = lView[TVIEW];
-  const lCleanup = lView[CLEANUP];
-  const tCleanup = tView.cleanup;
-  const listeners = [];
-  if (tCleanup && lCleanup) {
-    for (let i = 0; i < tCleanup.length; ) {
-      const firstParam = tCleanup[i++];
-      const secondParam = tCleanup[i++];
-      if (typeof firstParam === "string") {
-        const name = firstParam;
-        const listenerElement = unwrapRNode(lView[secondParam]);
-        const callback = lCleanup[tCleanup[i++]];
-        const useCaptureOrIndx = tCleanup[i++];
-        const type = typeof useCaptureOrIndx === "boolean" || useCaptureOrIndx >= 0 ? "dom" : "output";
-        const useCapture = typeof useCaptureOrIndx === "boolean" ? useCaptureOrIndx : false;
-        if (element == listenerElement) {
-          listeners.push({ element, name, callback, useCapture, type });
-        }
-      }
-    }
-  }
-  listeners.sort(sortListeners);
-  return listeners;
-}
-function sortListeners(a, b) {
-  if (a.name == b.name)
-    return 0;
-  return a.name < b.name ? -1 : 1;
-}
-function isDirectiveDefHack(obj) {
-  return obj.type !== void 0 && obj.declaredInputs !== void 0 && obj.findHostDirectiveDefs !== void 0;
-}
-function assertDomElement(value) {
-  if (typeof Element !== "undefined" && !(value instanceof Element)) {
-    throw new Error("Expecting instance of DOM Element");
-  }
-}
-function extractInputDebugMetadata(inputs) {
-  const res = {};
-  for (const key in inputs) {
-    if (!inputs.hasOwnProperty(key)) {
-      continue;
-    }
-    const value = inputs[key];
-    if (value === void 0) {
-      continue;
-    }
-    let minifiedName;
-    if (Array.isArray(value)) {
-      minifiedName = value[0];
-    } else {
-      minifiedName = value;
-    }
-    res[key] = minifiedName;
-  }
-  return res;
-}
 function ɵɵpureFunction0(slotOffset, pureFn, thisArg) {
   const bindingIndex = getBindingRoot() + slotOffset;
   const lView = getLView();
@@ -20062,7 +20063,7 @@ var Version = class {
     this.patch = parts.slice(2).join(".");
   }
 };
-var VERSION = new Version("17.3.0");
+var VERSION = new Version("17.3.1");
 var _Console = class _Console {
   log(message) {
     console.log(message);
@@ -20483,7 +20484,7 @@ var globalUtilsFunctions = {
   "ɵgetInjectorMetadata": getInjectorMetadata,
   "ɵsetProfiler": setProfiler,
   "getDirectiveMetadata": getDirectiveMetadata$1,
-  "getComponent": getComponent,
+  "getComponent": getComponent$1,
   "getContext": getContext,
   "getListeners": getListeners,
   "getOwningComponent": getOwningComponent,
@@ -21684,7 +21685,7 @@ var DebugNode = class {
    */
   get componentInstance() {
     const nativeElement = this.nativeNode;
-    return nativeElement && (getComponent(nativeElement) || getOwningComponent(nativeElement));
+    return nativeElement && (getComponent$1(nativeElement) || getOwningComponent(nativeElement));
   }
   /**
    * An object that provides parent context for this element. Often an ancestor component instance
@@ -21695,7 +21696,7 @@ var DebugNode = class {
    * of heroes"`.
    */
   get context() {
-    return getComponent(this.nativeNode) || getContext(this.nativeNode);
+    return getComponent$1(this.nativeNode) || getContext(this.nativeNode);
   }
   /**
    * The callbacks attached to the component's @Output properties and/or the element's event
@@ -24147,6 +24148,10 @@ export {
   ElementRef,
   EventEmitter,
   QueryList,
+  LContext,
+  getLContext,
+  getDirectives,
+  getHostElement,
   setDocument,
   APP_ID,
   PLATFORM_INITIALIZER,
@@ -24180,8 +24185,6 @@ export {
   ɵɵtrustConstantHtml,
   ɵɵtrustConstantResourceUrl,
   ɵɵsanitizeUrlOrResourceUrl,
-  LContext,
-  getLContext,
   CUSTOM_ELEMENTS_SCHEMA,
   NO_ERRORS_SCHEMA,
   ɵsetUnknownElementStrictMode,
@@ -24395,8 +24398,6 @@ export {
   ɵɵStandaloneFeature,
   ɵɵsetComponentScope,
   ɵɵsetNgModuleScope,
-  getDirectives,
-  getHostElement,
   ɵɵpureFunction0,
   ɵɵpureFunction1,
   ɵɵpureFunction2,
@@ -24521,14 +24522,14 @@ export {
 
 @angular/core/fesm2022/primitives/signals.mjs:
   (**
-   * @license Angular v17.3.0
+   * @license Angular v17.3.1
    * (c) 2010-2022 Google LLC. https://angular.io/
    * License: MIT
    *)
 
 @angular/core/fesm2022/core.mjs:
   (**
-   * @license Angular v17.3.0
+   * @license Angular v17.3.1
    * (c) 2010-2022 Google LLC. https://angular.io/
    * License: MIT
    *)
@@ -24560,4 +24561,4 @@ export {
    * found in the LICENSE file at https://angular.io/license
    *)
 */
-//# sourceMappingURL=chunk-YW2JQ5US.js.map
+//# sourceMappingURL=chunk-KJBDP7EP.js.map
