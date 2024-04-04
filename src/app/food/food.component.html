@@ -2,10 +2,56 @@
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
       <span>Food</span>
-      <button class="btn btn-primary">Add Food</button>
+      <button class="btn btn-primary" data-bs-target="#addFood" data-bs-toggle="modal">Add Food</button>
     </div>
     <ul class="list-group list-group-flush">
-      <!-- dynamically generated list of workouts -->
+      <ul class="list-group">
+        <li class="list-group-item">An item</li>
+        <li class="list-group-item">A second item</li>
+        <li class="list-group-item">A third item</li>
+        <li class="list-group-item">A fourth item</li>
+        <li class="list-group-item">And a fifth one</li>
+      </ul>
     </ul>
+  </div>
+</div>
+
+<div
+  class="modal fade"
+  id="addFood"
+  tabindex="-1"
+  aria-labelledby="exampleModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog model-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="addNewFood">Add New Food</h1>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <form>
+          <div class="mb-3">
+            <label for="workoutName" class="col-form-label">Food Name</label>
+            <input type="text" class="form-control" id="workoutName" />
+          </div>
+          <div class="mb-3">
+            <label for="workoutSets" class="col-form-label">Calories</label>
+            <input type="text" class="form-control" id="workoutSets" />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Close
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal" (click)="addFood()">Save Food</button>
+      </div>
+    </div>
   </div>
 </div>

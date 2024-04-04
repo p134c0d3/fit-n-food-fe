@@ -2,10 +2,70 @@
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
       <span>Workouts</span>
-      <button class="btn btn-primary">Add Workout</button>
+      <button
+        class="btn btn-primary"
+        data-bs-target="#addWorkout"
+        data-bs-toggle="modal"
+      >
+        Add Workout
+      </button>
     </div>
     <ul class="list-group list-group-flush">
-      <!-- dynamically generated list of workouts -->
+      <ul class="list-group">
+        <li class="list-group-item">An item</li>
+        <li class="list-group-item">A second item</li>
+        <li class="list-group-item">A third item</li>
+        <li class="list-group-item">A fourth item</li>
+        <li class="list-group-item">And a fifth one</li>
+      </ul>
     </ul>
+  </div>
+</div>
+
+<div
+  class="modal fade"
+  id="addWorkout"
+  tabindex="-1"
+  aria-labelledby="exampleModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog model-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="addNewWorkout">Add New Workout</h1>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <form>
+          <div class="mb-3">
+            <label for="workoutName" class="col-form-label">Workout Name</label>
+            <input type="text" class="form-control" id="workoutName" />
+          </div>
+          <div class="mb-3">
+            <label for="workoutSets" class="col-form-label">Sets</label>
+            <input type="text" class="form-control" id="workoutSets" />
+          </div>
+          <div class="mb-3">
+            <label for="workoutReps" class="col-form-label">Reps</label>
+            <input type="text" class="form-control" id="workoutReps" />
+          </div>
+          <div class="mb-3">
+            <label for="workoutCaloriesBurned" class="col-form-label">Calories Burned</label>
+            <input type="text" class="form-control" id="workoutCaloriesBurned" />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Close
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal" (click)="addWorkout()">Save Workout</button>
+      </div>
+    </div>
   </div>
 </div>

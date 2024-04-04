@@ -5,8 +5,12 @@ import { Component } from '@angular/core';
   standalone: true,
   imports: [],
   templateUrl: './food.component.html',
-  styleUrl: './food.component.css'
+  styleUrl: './food.component.css',
 })
 export class FoodComponent {
+  constructor() {}
 
+  addFood() {
+    console.log('Food added!');
+  }
 }

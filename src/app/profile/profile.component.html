@@ -2,10 +2,59 @@
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
       <span>Profile</span>
-      <button class="btn btn-primary">Edit Profile</button>
+      <button class="btn btn-primary" data-bs-target="#editProfile" data-bs-toggle="modal">Edit Profile</button>
     </div>
-    <ul class="list-group list-group-flush">
-      <!-- dynamically generated list of workouts -->
-    </ul>
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">Bio</h5>
+        <p class="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">Goals</h5>
+        <p class="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div
+  class="modal fade"
+  id="editProfile"
+  tabindex="-1"
+  aria-labelledby="exampleModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog model-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="editUserProfile">Edit Profile</h1>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <form>
+          <div class="mb-3">
+            <label for="profileBio" class="col-form-label">Bio</label>
+            <textarea type="text" class="form-control" id="profileBio"></textarea>
+          </div>
+          <div class="mb-3">
+            <label for="profileGoals" class="col-form-label">Goals</label>
+            <textarea type="text" class="form-control" id="profileGoals"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Close
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal" (click)="updateProfile()">Save Profile</button>
+      </div>
+    </div>
   </div>
 </div>

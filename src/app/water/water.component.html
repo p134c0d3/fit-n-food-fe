@@ -2,10 +2,48 @@
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
       <span>Water Intake</span>
-      <button class="btn btn-primary">Add Water</button>
+      <button class="btn btn-primary" data-bs-target="#addWater" data-bs-toggle="modal">Add Water</button>
     </div>
-    <ul class="list-group list-group-flush">
-      <!-- dynamically generated list of workouts -->
-    </ul>
+    <div class="card">
+      <div class="card-body">
+        <p class="card-text">You have drank {{ waterOunces }} ounces of water today!</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div
+  class="modal fade"
+  id="addWater"
+  tabindex="-1"
+  aria-labelledby="exampleModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog model-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="addNewWater">Add Water Intake</h1>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <form>
+          <div class="mb-3">
+            <label for="waterOunces" class="col-form-label">How many ounces did you drink?</label>
+            <input type="text" class="form-control" id="waterOunces" />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Close
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal" (click)="addWater()">Save Water</button>
+      </div>
+    </div>
   </div>
 </div>

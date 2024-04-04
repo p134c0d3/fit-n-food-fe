@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { log } from 'node:console';
 
 @Component({
   selector: 'app-water',
@@ -8,5 +9,12 @@ import { Component } from '@angular/core';
   styleUrl: './water.component.css'
 })
 export class WaterComponent {
+  waterOunces = 4
+
+  constructor() { }
+
+  addWater() {
+    console.log('Water added!');
+  }
 
 }
