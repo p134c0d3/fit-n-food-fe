@@ -10,15 +10,19 @@
         Add Workout
       </button>
     </div>
-    <ul class="list-group list-group-flush">
-      <ul class="list-group">
-        <li class="list-group-item">An item</li>
-        <li class="list-group-item">A second item</li>
-        <li class="list-group-item">A third item</li>
-        <li class="list-group-item">A fourth item</li>
-        <li class="list-group-item">And a fifth one</li>
-      </ul>
-    </ul>
+      <div class="card m-3" *ngFor="let workout of workouts; index as i">
+      <div class="card-header">
+        {{ workouts.name }}
+      </div>
+      <div class="card-body">
+        <blockquote class="blockquote mb-0">
+          <p>A well-known quote, contained in a blockquote element.</p>
+          <footer class="blockquote-footer">
+            Someone famous in <cite title="Source Title">Source Title</cite>
+          </footer>
+        </blockquote>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -55,8 +59,14 @@
             <input type="text" class="form-control" id="workoutReps" />
           </div>
           <div class="mb-3">
-            <label for="workoutCaloriesBurned" class="col-form-label">Calories Burned</label>
-            <input type="text" class="form-control" id="workoutCaloriesBurned" />
+            <label for="workoutCaloriesBurned" class="col-form-label"
+              >Calories Burned</label
+            >
+            <input
+              type="text"
+              class="form-control"
+              id="workoutCaloriesBurned"
+            />
           </div>
         </form>
       </div>
@@ -64,7 +74,14 @@
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
           Close
         </button>
-        <button type="button" class="btn btn-primary" data-bs-dismiss="modal" (click)="addWorkout()">Save Workout</button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          data-bs-dismiss="modal"
+          (click)="addWorkout()"
+        >
+          Save Workout
+        </button>
       </div>
     </div>
   </div>
