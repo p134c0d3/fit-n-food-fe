@@ -1,7 +1,8 @@
 <div class="container p-0">
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <span>Workouts</span>
+      <strong><span>Workouts</span></strong>
+      <strong>Total Calories Burned - <span style="font-size: x-large; border: 3px solid black; border-radius: 5px; margin: 2px;">{{ totalBurnedCalories }} calories</span></strong>
       <button
         class="btn btn-primary"
         data-bs-target="#addWorkout"
@@ -10,16 +11,15 @@
         Add Workout
       </button>
     </div>
-      <div class="card m-3" *ngFor="let workout of workouts; index as i">
-      <div class="card-header">
-        {{ workouts.name }}
+    <div class="card m-3" *ngFor="let workout of workouts">
+      <div class="card-header" style="font-size: large">
+        <strong>{{ workout.workoutName }}</strong>
       </div>
       <div class="card-body">
         <blockquote class="blockquote mb-0">
-          <p>A well-known quote, contained in a blockquote element.</p>
-          <footer class="blockquote-footer">
-            Someone famous in <cite title="Source Title">Source Title</cite>
-          </footer>
+          <p><strong>Sets: </strong>{{ workout.sets }}</p>
+          <p><strong>Reps: </strong>{{ workout.reps }}</p>
+          <p><strong>Calories Burned: </strong>{{ workout.caloriesBurned }}</p>
         </blockquote>
       </div>
     </div>

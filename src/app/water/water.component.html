@@ -1,12 +1,23 @@
 <div class="container p-0">
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <span>Water Intake</span>
-      <button class="btn btn-primary" data-bs-target="#addWater" data-bs-toggle="modal">Add Water</button>
+      <strong><span>Total Water Intake Today - <span style="font-size: x-large; border: 3px solid black; border-radius: 5px; margin: 2px;">{{ totalOunces }} ounces</span></span></strong>
+      <button
+        class="btn btn-primary"
+        data-bs-target="#addWater"
+        data-bs-toggle="modal"
+      >
+        Add Water
+      </button>
     </div>
-    <div class="card">
+    <div class="card m-3">
+      <div class="card-header" style="font-size: large">
+        <strong>Water Intake</strong>
+      </div>
       <div class="card-body">
-        <p class="card-text">You have drank {{ waterOunces }} ounces of water today!</p>
+        <blockquote class="blockquote mb-0">
+          <p>You drank <strong>{{ waterOunces.waterOunces }}</strong> ounces of water this sitting.</p>
+        </blockquote>
       </div>
     </div>
   </div>
